@@ -1,0 +1,119 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <style>
+    img.displayed {
+        display: block;
+        margin-left: auto;
+        margin-right: auto }
+
+    #myProgress {
+      position: relative;
+      width: 100%;
+      height: 100px;
+      background-color: #ddd;
+    }
+
+    #myBar {
+      position: absolute;
+      width: 0%;
+      height: 100%;
+      background-color: #4CAF50;
+    }
+    </style>
+
+    <title>Power Sequence Control</title>
+    <script type="text/javascript" src="//code.jquery.com/jquery-1.4.2.min.js"></script>
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.5/socket.io.min.js"></script>
+    <script type="text/javascript" charset="utf-8">
+        $(document).ready(function() {
+            // Use a "/test" namespace.
+            // An application can open a connection on multiple namespaces, and
+            // Socket.IO will multiplex all those connections on a single
+            // physical channel. If you don't care about multiple channels, you
+            // can set the namespace to an empty string.
+            namespace = '/test';
+
+            // Connect to the Socket.IO server.
+            // The connection URL has the following format:
+            //     http[s]://<domain>:<port>[/<namespace>]
+            var socket = io.connect('http://' + document.domain + ':' + location.port + namespace);
+
+            // Event handler for server sent rack power status.
+            // The callback function is invoked whenever the server emits data
+            // to the client. The data is then displayed in the "Received"
+            // section of the page.
+            socket.on('pwrstat', function(msg) {
+                console.log(msg.data);
+                $('#pwrstat').html(msg.data)
+            });
+            socket.on('pwrbar', function(msg) {
+                console.log('pwrbar:' + msg.progress);
+                var elem = document.getElementById("myBar");
+                elem.style.width = msg.progress + '%';
+                if (msg.progress >= 100) {
+                    document.getElementById('myImage').src="{{ url_for('index') }}static/bulbon.gif";
+                 } else if (msg.progress <= 0) {
+                    document.getElementById('myImage').src="{{ url_for('index') }}static/bulboff.gif";
+                 }
+            });
+
+            // Interval function that tests message latency by sending a "ping"
+            // message. The server then responds with a "pong" message and the
+            // round trip time is measured.
+            var ping_pong_times = [];
+            var start_time;
+            window.setInterval(function() {
+                start_time = (new Date).getTime();
+                socket.emit('my_ping');
+            }, 5000);
+
+            // Handler for the "pong" message. When the pong is received, the
+            // time from the ping is stored, and the average of the last 30
+            // samples is average and displayed.
+            socket.on('my_pong', function() {
+                var latency = (new Date).getTime() - start_time;
+                ping_pong_times.push(latency);
+                ping_pong_times = ping_pong_times.slice(-30); // keep last 30 samples
+                var sum = 0;
+                for (var i = 0; i < ping_pong_times.length; i++)
+                    sum += ping_pong_times[i];
+                $('#ping-pong').text(Math.round(10 * sum / ping_pong_times.length) / 10);
+            });
+
+            // Handlers for the different forms in the page.
+            // These accept data from the user and send it to the server in a
+            // variety of ways
+            $('form#powerup').submit(function(event) {
+                socket.emit('powerup');
+                return false;
+            });
+            $('form#powerdn').submit(function(event) {
+                socket.emit('powerdn');
+                return false;
+            });
+        });
+    </script>
+
+</head>
+
+<body>
+    <h1>Rack Power Sequence Control</h1>
+    <p>Average connection latency: <b><span id="ping-pong"></span>ms</b></p>
+    <h2>Progress:</h2>
+    <div id="myProgress">
+        <div id="myBar"></div>
+    </div>
+    <img class="displayed" id="myImage" src="{{ url_for('index') }}static/bulboff.gif" style="width:50px" position="center"/>
+
+    <br>
+    <form id="powerup" method="POST" action="#">
+        <input type="submit" value="Power Up">
+    </form>
+    <form id="powerdn" method="POST" action="#">
+        <input type="submit" value="Power Down">
+    </form>
+    <h2>Power Status:</h2>
+    <div id="pwrstat"></div>
+</body>
+</html>
